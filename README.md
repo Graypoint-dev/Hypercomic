@@ -1,8 +1,8 @@
 # Hypercomic
 
-Hypercomic smartcontract
-
 DECENTRALIZED & HYPERFICTION
 FULLY OPEN COMIC PLATFORM
+
+Hypercomic smartcontract
 
 https://hypercomic.io

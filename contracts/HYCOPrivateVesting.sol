@@ -73,7 +73,7 @@ contract HYCOPrivateVesting is Ownable {
     }
 
     /**
-     * @dev Release the tokens that have already vested.
+     * @dev Release the tokens.
      *
      * Emits a {TokensReleased} event.
      */

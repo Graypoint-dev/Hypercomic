@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract HYCOPrivateVesting is Ownable {
     event SetVesting(address indexed account, uint256 amount, uint256 startTime, uint256 duration);
+    event UpdateVesting(address indexed account, uint256 valueIndex, uint256 value);
     event Released(address indexed account, uint256 amount);
 
     struct VestingInfo {
@@ -36,7 +37,8 @@ contract HYCOPrivateVesting is Ownable {
      * @dev Setter for the VestingInfo.
      */
     function setVestingInfo (address beneficiaryAddress, uint256 amount, uint256 startTime, uint256 duration) external onlyOwner {
-        require(beneficiaryAddress != address(0), "Beneficiary cannot be address zero");
+        require(_vestingInfos[beneficiaryAddress].amount < 1, "Aleady exist vestig info.");
+        require(beneficiaryAddress != address(0), "Beneficiary cannot be address zero.");
         require(block.timestamp < startTime, "ERC20 : Current time is greater than start time");
         require(duration > 86400, "ERC20 : Duration is greater than one day");
         require(amount > 0, "ERC20: Amount is greater than 0");
@@ -50,16 +52,22 @@ contract HYCOPrivateVesting is Ownable {
         require(_vestingInfos[beneficiaryAddress].amount > 0, "Not exist vesting info.");
         require(value > 0, "ERC20: Amount is greater than 0.");
         _vestingInfos[beneficiaryAddress].amount = value;
+
+        emit UpdateVesting( beneficiaryAddress, 1, value );
     }
     function setVestingStartTime (address beneficiaryAddress, uint256 value) external onlyOwner {
         require(_vestingInfos[beneficiaryAddress].startTime > 0, "Not exist vesting info.");
         require(block.timestamp < value, "ERC20 : Current time is greater than start time");
         _vestingInfos[beneficiaryAddress].startTime = value;
+
+        emit UpdateVesting( beneficiaryAddress, 2, value );
     }
     function setVestingDuration(address beneficiaryAddress, uint256 value) external onlyOwner {
         require(_vestingInfos[beneficiaryAddress].duration > 0, "Not exist vesting info.");
         require(value > 86400, "ERC20 : Duration is greater than one day");
         _vestingInfos[beneficiaryAddress].duration = value;
+
+        emit UpdateVesting( beneficiaryAddress, 3, value );
     }
 
     /**
@@ -68,7 +76,7 @@ contract HYCOPrivateVesting is Ownable {
     function getVestingInfo(address beneficiaryAddress) public view virtual returns (uint256 amount, uint256 startTime, uint256 duration, uint256 released) {
         return (_vestingInfos[beneficiaryAddress].amount, _vestingInfos[beneficiaryAddress].startTime, _vestingInfos[beneficiaryAddress].duration, _vestingInfos[beneficiaryAddress].released);
     }
-    function getVestingWallets() public view virtual returns (address[] memory) {
+    function getVestingWallets() public view virtual onlyOwner returns (address[] memory) {
         return (_vestingWallets);
     }
 

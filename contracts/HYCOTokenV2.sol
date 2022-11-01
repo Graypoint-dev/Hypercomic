@@ -24,6 +24,229 @@ abstract contract Context {
 }
 
 
+// OpenZeppelin Contracts (last updated v4.7.0) (access/Ownable.sol)
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the owner account will be the one that deploys the contract. This
+ * can later be changed with {transferOwnership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+ * the owner.
+ */
+abstract contract Ownable is Context {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
+        _transferOwnership(_msgSender());
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        _checkOwner();
+        _;
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if the sender is not the owner.
+     */
+    function _checkOwner() internal view virtual {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _transferOwnership(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal virtual {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+
+// File contracts/Confirmer.sol
+pragma solidity >=0.8.0 <0.9.0;
+
+abstract contract Confirmer is Ownable {
+
+    event AddConfirmer (address account);
+    event RemoveConfirmer (address account);
+    event Confirmed (address account, uint256 confirmedTime);
+    
+    struct ConfirmInfo {
+        bool confirmed;
+        uint256 validTime;
+    }
+    
+    mapping(address => ConfirmInfo) private _confirmInfos;
+
+    address[] public _confirmers;
+
+    constructor() {
+    }
+
+    modifier isConfirmed() {
+        require(_checkConfirmed(), "Insufficient execution conditions.");
+        _;
+    }
+
+    modifier isConfirmer(address walletAddress) {
+        require(_checkConfirmer(walletAddress), "This address or caller is not the confirmer.");
+        _;
+    }
+
+    function _checkConfirmed() 
+        internal
+        view
+        returns (bool)
+    {
+        uint8 confirmedCount = 0;
+        for (uint8 i = 0; i < _confirmers.length; i++) {
+            if (_confirmInfos[_confirmers[i]].confirmed == true 
+                && _confirmInfos[_confirmers[i]].validTime > block.timestamp) 
+            {
+                confirmedCount++;
+            }
+        }
+
+        if (confirmedCount > 1) return true;
+        else return false;
+    }
+
+    function _checkConfirmer(address walletAddress)
+        internal
+        view
+        returns (bool)
+    {
+        for (uint8 i = 0; i < _confirmers.length; i++) {
+            if (_confirmers[i] == walletAddress) {
+                return true;
+            }
+        }
+
+        return false;
+    }    
+
+    function addConfirmer(address walletAddress) 
+        public
+        onlyOwner
+        isConfirmed
+    {
+        require(!_checkConfirmer(walletAddress), "Aleady exist confirmer.");
+
+        _confirmers.push(walletAddress);
+        _resetConfirmed();
+
+        emit AddConfirmer(walletAddress);
+    }
+
+    function removeConfirmer(address walletAddress)
+        public
+        onlyOwner
+        isConfirmed
+        isConfirmer(walletAddress)
+    {
+        require(_confirmers.length > 3, "Must be at least 3 confirmers.");
+        uint8 j = 0;
+        for (uint8 i = 0; i < _confirmers.length; i++) {
+            if (_confirmers[i] != walletAddress) {
+                _confirmers[j] = _confirmers[i];
+                j++;
+            } else if (_confirmers[i] == walletAddress){
+                delete _confirmers[i];
+                delete _confirmInfos[_confirmers[i]];
+            }
+        }
+
+        _confirmers.pop();
+        _resetConfirmed();
+
+        emit RemoveConfirmer (walletAddress);
+    }
+
+    function _resetConfirmed()
+        internal
+    {
+        require((_checkConfirmer(msg.sender) || msg.sender == owner()), "Caller is not the owner or confirmer.");
+        for (uint8 i = 0; i < _confirmers.length; i++) {
+            _confirmInfos[_confirmers[i]].confirmed = false;
+            _confirmInfos[_confirmers[i]].validTime = block.timestamp;
+        }     
+    }
+
+    function toConfirm()
+        public
+        isConfirmer(msg.sender)
+    {
+        _confirmInfos[msg.sender].confirmed = true;
+        _confirmInfos[msg.sender].validTime = block.timestamp + 86400;
+
+        emit Confirmed(msg.sender, block.timestamp);
+    }
+
+    function getConfirmer() 
+        public
+        view
+        onlyOwner
+        returns (address[] memory) 
+    {
+        return (_confirmers);
+    }
+
+    function getConfirmed(address walletAddress) 
+        public
+        view
+        onlyOwner
+        returns (bool, uint256)
+    {
+        return (_confirmInfos[walletAddress].confirmed, _confirmInfos[walletAddress].validTime);
+    }    
+
+}
+
+
 // OpenZeppelin Contracts (last updated v4.7.0) (security/Pausable.sol)
 
 pragma solidity ^0.8.0;
@@ -620,88 +843,6 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 }
 
 
-// OpenZeppelin Contracts (last updated v4.7.0) (access/Ownable.sol)
-
-pragma solidity ^0.8.0;
-
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-abstract contract Ownable is Context {
-    address private _owner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
-     */
-    constructor() {
-        _transferOwnership(_msgSender());
-    }
-
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyOwner() {
-        _checkOwner();
-        _;
-    }
-
-    /**
-     * @dev Returns the address of the current owner.
-     */
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
-
-    /**
-     * @dev Throws if the sender is not the owner.
-     */
-    function _checkOwner() internal view virtual {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
-    }
-
-    /**
-     * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
-     *
-     * NOTE: Renouncing ownership will leave the contract without an owner,
-     * thereby removing any functionality that is only available to the owner.
-     */
-    function renounceOwnership() public virtual onlyOwner {
-        _transferOwnership(address(0));
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        _transferOwnership(newOwner);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Internal function without access restriction.
-     */
-    function _transferOwnership(address newOwner) internal virtual {
-        address oldOwner = _owner;
-        _owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
-    }
-}
-
-
 // OpenZeppelin Contracts (last updated v4.5.0) (token/ERC20/extensions/ERC20Burnable.sol)
 
 pragma solidity ^0.8.0;
@@ -740,10 +881,11 @@ abstract contract ERC20Burnable is Context, ERC20 {
 }
 
 
+
 pragma solidity >=0.8.0 <0.9.0;
 
 
-contract HYCOToken is ERC20, ERC20Burnable, Pausable, Ownable {
+contract HYCOToken is ERC20, ERC20Burnable, Pausable, Ownable, Confirmer {
 
     event TimeLock(address indexed account, uint256 amount, uint256 startTime, uint256 releaseMonths);
     event TimeLockUpdate (address indexed account, uint256 valueIndex, uint256 value);
@@ -753,28 +895,44 @@ contract HYCOToken is ERC20, ERC20Burnable, Pausable, Ownable {
         uint256 startTime;
         uint256 releaseMonths;
     }
+    
     mapping(address => LockInfo) private _lockInfos;
+
     address[] private _lockedWallets;
 
-    constructor() ERC20("HYCOToken", "HYCO") {
+    constructor(address confirmer1, address confirmer2) ERC20("HYCOToken", "HYCO") {
         _mint(msg.sender, 100000000 * 10 ** decimals());
+
+        _confirmers.push(msg.sender);
+        _confirmers.push(confirmer1);
+        _confirmers.push(confirmer2);
+        _resetConfirmed();
     }
 
-    function pause() public onlyOwner {
-        _pause();
-    }
-
-    function unpause() public onlyOwner {
-        _unpause();
-    }
-
-    function _beforeTokenTransfer(address from, address to, uint256 amount)
-        internal
-        whenNotPaused
-        override
+    function pause() public onlyOwner isConfirmed 
     {
-        require( !_isLocked( from, amount ) , "ERC20: Locked balance.");
-        super._beforeTokenTransfer(from, to, amount);
+        _pause();
+        _resetConfirmed();
+    }
+
+    function unpause() public onlyOwner isConfirmed 
+    {
+        _unpause();
+        _resetConfirmed();
+    }
+
+    function transferOwnership(address newOwner) public isConfirmer(msg.sender) isConfirmed override
+    {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+
+        super._transferOwnership(newOwner);
+        _resetConfirmed();
+    }
+
+    function renounceOwnership() public onlyOwner isConfirmed override
+    {
+        super.renounceOwnership();
+        _resetConfirmed();
     }
 
     function setLock(address walletAddress, uint256 startTime, uint256 releaseMonths, uint256 amount) 
@@ -795,34 +953,40 @@ contract HYCOToken is ERC20, ERC20Burnable, Pausable, Ownable {
     function setLockReleaseMonths(address walletAddress, uint256 releaseMonths)
         public
         onlyOwner
+        isConfirmed
     {
         require(_lockInfos[walletAddress].amount > 0, "Not exist lock info.");
         require(releaseMonths > 0, "ERC20: ReleaseMonths is greater than 0.");
         _lockInfos[walletAddress].releaseMonths = releaseMonths;
 
         emit TimeLockUpdate (walletAddress, 3, releaseMonths);
+        _resetConfirmed();
     }
 
     function setLockStartTime(address walletAddress, uint256 startTime)
         public
         onlyOwner
+        isConfirmed
     {
         require(_lockInfos[walletAddress].amount > 0, "Not exist lock info.");
         require(block.timestamp < startTime, "ERC20: Current time is greater than start time");
         _lockInfos[walletAddress].startTime = startTime;
 
         emit TimeLockUpdate (walletAddress, 2, startTime);
+        _resetConfirmed();
     }
 
     function setLockAmount(address walletAddress, uint256 amount)
         public
         onlyOwner
+        isConfirmed
     {
         require(_lockInfos[walletAddress].amount > 0, "Not exist lock info.");
         require(amount > 0, "ERC20: Amount is greater than 0.");
         _lockInfos[walletAddress].amount = amount;
 
         emit TimeLockUpdate (walletAddress, 1, amount);
+        _resetConfirmed();
     }
 
     function getLockInfo(address walletAddress) 
@@ -882,6 +1046,15 @@ contract HYCOToken is ERC20, ERC20Burnable, Pausable, Ownable {
         } else {
             return false;
         }
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 amount)
+        internal
+        whenNotPaused
+        override
+    {
+        require( !_isLocked( from, amount ) , "ERC20: Locked balance.");
+        super._beforeTokenTransfer(from, to, amount);
     }
 
 }

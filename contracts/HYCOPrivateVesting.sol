@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "./Confirmer.sol";
 
-
-contract HYCOPrivateVesting is Ownable {
+contract HYCOPrivateVesting is Ownable, Confirmer {
     event SetVesting(address indexed account, uint256 amount, uint256 startTime, uint256 duration);
     event UpdateVesting(address indexed account, uint256 valueIndex, uint256 value);
     event Released(address indexed account, uint256 amount);
@@ -23,20 +23,41 @@ contract HYCOPrivateVesting is Ownable {
     address[] private _vestingWallets;
 
     IERC20 private immutable _erc20;
-
+    
     /**
      * @dev Set the ERC20 token address.
      */
     constructor(
-        address erc20Address
+        address erc20Address,
+        address confirmer1, 
+        address confirmer2
     ) {
         _erc20 = IERC20(erc20Address);
+
+        _confirmers.push(msg.sender);
+        _confirmers.push(confirmer1);
+        _confirmers.push(confirmer2);
+        _resetConfirmed();        
     }
+
+    function transferOwnership(address newOwner) public isConfirmer(msg.sender) isConfirmed override
+    {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+
+        super._transferOwnership(newOwner);
+        _resetConfirmed();
+    }
+
+    function renounceOwnership() public onlyOwner isConfirmed override
+    {
+        super.renounceOwnership();
+        _resetConfirmed();
+    }    
 
     /**
      * @dev Setter for the VestingInfo.
      */
-    function setVestingInfo (address beneficiaryAddress, uint256 amount, uint256 startTime, uint256 duration) external onlyOwner {
+    function setVestingInfo (address beneficiaryAddress, uint256 amount, uint256 startTime, uint256 duration) external onlyOwner isConfirmed {
         require(_vestingInfos[beneficiaryAddress].amount < 1, "Aleady exist vestig info.");
         require(beneficiaryAddress != address(0), "Beneficiary cannot be address zero.");
         require(block.timestamp < startTime, "ERC20 : Current time is greater than start time");
@@ -47,27 +68,31 @@ contract HYCOPrivateVesting is Ownable {
         _vestingWallets.push(beneficiaryAddress);
 
         emit SetVesting( beneficiaryAddress, amount, startTime, duration );
+        _resetConfirmed();
     }
-    function setVestingAmount (address beneficiaryAddress, uint256 value) external onlyOwner {
+    function setVestingAmount (address beneficiaryAddress, uint256 value) external onlyOwner isConfirmed {
         require(_vestingInfos[beneficiaryAddress].amount > 0, "Not exist vesting info.");
         require(value > 0, "ERC20: Amount is greater than 0.");
         _vestingInfos[beneficiaryAddress].amount = value;
 
         emit UpdateVesting( beneficiaryAddress, 1, value );
+        _resetConfirmed();
     }
-    function setVestingStartTime (address beneficiaryAddress, uint256 value) external onlyOwner {
+    function setVestingStartTime (address beneficiaryAddress, uint256 value) external onlyOwner isConfirmed {
         require(_vestingInfos[beneficiaryAddress].startTime > 0, "Not exist vesting info.");
         require(block.timestamp < value, "ERC20 : Current time is greater than start time");
         _vestingInfos[beneficiaryAddress].startTime = value;
 
         emit UpdateVesting( beneficiaryAddress, 2, value );
+        _resetConfirmed();
     }
-    function setVestingDuration(address beneficiaryAddress, uint256 value) external onlyOwner {
+    function setVestingDuration(address beneficiaryAddress, uint256 value) external onlyOwner isConfirmed {
         require(_vestingInfos[beneficiaryAddress].duration > 0, "Not exist vesting info.");
         require(value > 86400, "ERC20 : Duration is greater than one day");
         _vestingInfos[beneficiaryAddress].duration = value;
 
         emit UpdateVesting( beneficiaryAddress, 3, value );
+        _resetConfirmed();
     }
 
     /**
